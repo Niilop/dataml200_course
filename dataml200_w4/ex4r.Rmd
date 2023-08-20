@@ -1,0 +1,96 @@
+---
+title: "ex4R"
+output:
+  word_document: default
+  html_document: default
+date: "2023-04-24"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+data("marketing", package = "datarium")
+head(marketing)
+```
+
+Lets first see what a default simple linear model looks like
+
+```{r}
+model = lm(sales ~ youtube + facebook + newspaper, data=marketing)
+summary(model)
+```
+We can see that the p-value of newspaper is 0.86 which makes it statistically insignificant. We can do variable selection to remove it for better results. Lets build 3 different models with glmnet and examine the results (MSE and SE).
+
+```{r}
+library(glmnet)
+# predictor variable x excluding newspaper since the p value was high
+x <- as.matrix(marketing[, 1:2])
+y <- marketing$sales
+
+# alpha 0 = ridge regression
+mod_cv <- cv.glmnet(x, y, alpha = 0, nfolds = 10, type.measure = "mse")
+cat("10 fold cv model: min MSE =",min(mod_cv$cvm), "SE = ",min(mod_cv$cvsd), "\n")
+
+# folds = nrow(x) means that looc is used
+mod_loocv <- cv.glmnet(x, y, alpha = 0, type.measure = "mse", nfolds = nrow(x), grouped=FALSE)
+cat("loocv model: min MSE =",min(mod_loocv$cvm), "SE = ",min(mod_loocv$cvsd), "\n")
+
+# alpha 1 = lasso regression
+lasso_cv <- cv.glmnet(x, y, alpha = 1, nfolds = 10, type.measure = "mse")
+cat("lasso cv model: min MSE =",min(lasso_cv$cvm), "SE = ",min(lasso_cv$cvsd), "\n")
+```
+Observing MSE and Standard Error, we can see that lasso model with 10 fold cv achieves the lowest MSE and Standard Error, while the two ridge models have very similar estimates. Using these estimates as a score for best fit, we conclude that the cross validated lasso model is the "best". However, caliming that a model is best in this case (or any case to be fair) is very questionable as there are many other things to consider, so these claims should be considered with caution.
+
+```{r}
+flu <- matrix(c(3, 10, 15, 13), 2)
+colnames(flu) <- c("Shot = True", "Shot = False")
+rownames(flu) <- c("Flu = True", "Flu = False")
+flu
+```
+#I
+Null hypothesis: There is no significant difference in the propotion of people who got flu between people who got flu shot and people who didn't get flu shot.
+
+Alternative hypotherisis: The propotion of people who got flu is significantly different between people who got flu shot and people who didn't get flu shot.
+
+We can use the fisher test for this case
+
+```{r}
+fisher.test(flu)
+```
+#II
+The p-value is significant when alpha > 0.1, but not anything lower than this. So we can conclude that there is difference between the groups on 90% confidence level, but anything higher than this is not statistically significant.
+
+#III
+
+We can estimate p-value by calculating z-value first and then using normal distribution.
+
+```{r}
+# flu shot
+n1 <- 13
+# no flu shot
+n2 <- 28
+# no flu
+x1 <- 3
+# got flu
+x2 <- 15    
+
+# propotions
+p1 <- x1/n1
+p2 <- x2/n2
+
+p_hat = (x1 + x2)/(n1 + n2)
+  
+# standard error
+se = sqrt(p_hat*(1-p_hat)*(1/n1 + 1/n2))
+
+# z-value
+z <- (p1 - p2)/se
+
+# as z-value is normally distributed, we can calculate p-value using it
+p_value <- 2 * pnorm(-abs(z))
+
+p_value
+```
+The p-value is low, but still wont quite achieve significance level of 0.05. However the results from both of the tests indicate difference between the groups with 90 confidence level, we can reject the null hypothesis on both of the tests and conclude that there is statistical significance between the propotions of people with or without the flu shot.
